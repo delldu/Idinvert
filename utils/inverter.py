@@ -11,6 +11,8 @@ from models.stylegan_generator import StyleGANGenerator
 from models.stylegan_encoder import StyleGANEncoder
 from models.perceptual_model import PerceptualModel
 
+import pdb
+
 __all__ = ['StyleGANInverter']
 
 
@@ -71,6 +73,7 @@ class StyleGANInverter(object):
     self.model_name = model_name
     self.gan_type = 'stylegan'
 
+    # pdb.set_trace()
     self.G = StyleGANGenerator(self.model_name, self.logger)
     self.E = StyleGANEncoder(self.model_name, self.logger)
     self.F = PerceptualModel(min_val=self.G.min_val, max_val=self.G.max_val)
@@ -87,6 +90,15 @@ class StyleGANInverter(object):
     self.loss_feat_weight = perceptual_loss_weight
     self.loss_reg_weight = regularization_loss_weight
     assert self.loss_pix_weight > 0
+
+    # pdb.set_trace()
+    # model_name = 'styleganinv_ffhq256'
+    # learning_rate = 0.01
+    # iteration = 100
+    # reconstruction_loss_weight = 1.0
+    # perceptual_loss_weight = 5e-05
+    # regularization_loss_weight = 2.0
+    # logger = <Logger inversion_logger (DEBUG)>
 
 
   def preprocess(self, image):
@@ -139,6 +151,13 @@ class StyleGANInverter(object):
     x = image[np.newaxis]
     x = self.G.to_tensor(x.astype(np.float32))
     z = _get_tensor_value(self.E.net(x).view(1, *self.encode_dim))
+    # pdb.set_trace()
+    # (Pdb) type(image), image.shape, image.mean(), image.min(), image.max()
+    # (<class 'numpy.ndarray'>, (3, 256, 256), -0.39719763, -0.99215686, 0.99215686)
+
+    # (Pdb) type(z), z.shape, z.mean(), z.min(), z.max()
+    # (<class 'numpy.ndarray'>, (1, 14, 512), 0.07589368, -2.9277837, 3.3327289)
+    
     return z.astype(np.float32)
 
   def invert(self, image, num_viz=0):
@@ -164,6 +183,7 @@ class StyleGANInverter(object):
     init_z = self.get_init_code(image)
     z = torch.Tensor(init_z).to(self.run_device)
     z.requires_grad = True
+    # pdb.set_trace()
 
     optimizer = torch.optim.Adam([z], lr=self.learning_rate)
 
@@ -188,6 +208,8 @@ class StyleGANInverter(object):
         loss_feat = torch.mean((x_feat - x_rec_feat) ** 2)
         loss = loss + loss_feat * self.loss_feat_weight
         log_message += f', loss_feat: {_get_tensor_value(loss_feat):.3f}'
+      # pdb.set_trace()
+      # (Pdb) self.loss_reg_weight -- 2.0
 
       # Regularization loss.
       if self.loss_reg_weight:
@@ -196,6 +218,9 @@ class StyleGANInverter(object):
         loss = loss + loss_reg * self.loss_reg_weight
         log_message += f', loss_reg: {_get_tensor_value(loss_reg):.3f}'
 
+      # pdb.set_trace()
+      # self.loss_reg_weight -- 2.0
+      
       log_message += f', loss: {_get_tensor_value(loss):.3f}'
       pbar.set_description_str(log_message)
       if self.logger:

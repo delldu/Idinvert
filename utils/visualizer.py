@@ -5,6 +5,7 @@ import base64
 import os.path
 import cv2
 import numpy as np
+import pdb
 
 __all__ = [
     'get_grid_shape', 'get_blank_image', 'load_image', 'save_image',
