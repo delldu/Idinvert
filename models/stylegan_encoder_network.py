@@ -14,13 +14,6 @@ import pdb
 
 __all__ = ["StyleGANEncoderNet"]
 
-# Resolutions allowed.
-_RESOLUTIONS_ALLOWED = [8, 16, 32, 64, 128, 256, 512, 1024]
-
-# Initial resolution.
-_INIT_RES = 4
-
-
 class StyleGANEncoderNet(nn.Module):
     """Defines the encoder network for StyleGAN inversion.
 
@@ -38,41 +31,22 @@ class StyleGANEncoderNet(nn.Module):
         use_wscale=False,
         use_bn=False,
     ):
-        """Initializes the encoder with basic settings.
-
-        Args:
-          resolution: The resolution of the input image.
-          w_space_dim: The dimension of the disentangled latent vectors, w.
-            (default: 512)
-          image_channels: Number of channels of the input image. (default: 3)
-          encoder_channels_base: Base factor of the number of channels used in
-            residual blocks of encoder. (default: 64)
-          encoder_channels_max: Maximum number of channels used in residual blocks
-            of encoder. (default: 1024)
-          use_wscale: Whether to use `wscale` layer. (default: False)
-          use_bn: Whether to use batch normalization layer. (default: False)
-
-        Raises:
-          ValueError: If the input `resolution` is not supported.
-        """
         super().__init__()
+        # resolution = 256
+        # w_space_dim = 512
+        # image_channels = 3
+        # encoder_channels_base = 64
+        # encoder_channels_max = 1024
 
-        if resolution not in _RESOLUTIONS_ALLOWED:
-            raise ValueError(
-                f"Invalid resolution: {resolution}!\n"
-                f"Resolutions allowed: {_RESOLUTIONS_ALLOWED}."
-            )
-
-        self.init_res = _INIT_RES
+        self.init_res = 4
         self.resolution = resolution
         self.w_space_dim = w_space_dim
         self.image_channels = image_channels
         self.encoder_channels_base = encoder_channels_base
         self.encoder_channels_max = encoder_channels_max
-        self.use_wscale = use_wscale
-        self.use_bn = use_bn
         # Blocks used in encoder.
-        self.num_blocks = int(np.log2(resolution))
+
+        self.num_blocks = int(np.log2(resolution)) # 8
 
         # Layers used in generator.
         self.num_layers = int(np.log2(self.resolution // self.init_res * 2)) * 2
@@ -87,8 +61,8 @@ class StyleGANEncoderNet(nn.Module):
                     FirstBlock(
                         in_channels=in_channels,
                         out_channels=out_channels,
-                        use_wscale=self.use_wscale,
-                        use_bn=self.use_bn,
+                        use_wscale=False,
+                        use_bn=True,
                     ),
                 )
 
@@ -101,47 +75,38 @@ class StyleGANEncoderNet(nn.Module):
                         in_channels=in_channels,
                         out_channels=out_channels,
                         use_wscale=True,
-                        use_bn=self.use_bn,
+                        use_bn=True,
                     ),
                 )
 
             else:
-                self.add_module(
-                    f"block{block_idx}",
-                    ResBlock(
-                        in_channels=in_channels,
-                        out_channels=out_channels,
-                        use_wscale=self.use_wscale,
-                        use_bn=self.use_bn,
-                    ),
-                )
+                if in_channels != out_channels:
+                    self.add_module(
+                        f"block{block_idx}",
+                        ResBlock1(
+                            in_channels=in_channels,
+                            out_channels=out_channels,
+                            use_wscale=False,
+                            use_bn=True,
+                        ),
+                    )
+                else:
+                    self.add_module(
+                        f"block{block_idx}",
+                        ResBlock2(
+                            in_channels=in_channels,
+                            out_channels=out_channels,
+                            use_wscale=False,
+                            use_bn=True,
+                        ),
+                    )                
             in_channels = out_channels
             out_channels = min(out_channels * 2, self.encoder_channels_max)
 
         self.downsample = AveragePoolingLayer()
-        # resolution = 256
-        # w_space_dim = 512
-        # image_channels = 3
-        # encoder_channels_base = 64
-        # encoder_channels_max = 1024
-        # use_wscale = False
-        # use_bn = True
 
     def forward(self, x):
         # (Pdb) x.size() -- [1, 3, 256, 256]
-
-        if x.ndim != 4 or x.shape[1:] != (
-            self.image_channels,
-            self.resolution,
-            self.resolution,
-        ):
-            raise ValueError(
-                f"The input image should be with shape [batch_size, "
-                f"channel, height, width], where "
-                f"`channel` equals to {self.image_channels}, "
-                f"`height` and `width` equal to {self.resolution}!\n"
-                f"But {x.shape} is received!"
-            )
 
         for block_idx in range(self.num_blocks):
             if 0 < block_idx < self.num_blocks - 1:
@@ -212,15 +177,7 @@ class WScaleLayer(nn.Module):
         self.bias = nn.Parameter(torch.zeros(out_channels))
 
     def forward(self, x):
-        if x.ndim == 4:
-            return x * self.scale + self.bias.view(1, -1, 1, 1)
-        if x.ndim == 2:
-            return x * self.scale + self.bias.view(1, -1)
-        raise ValueError(
-            f"The input tensor should be with shape [batch_size, "
-            f"channel, height, width], or [batch_size, channel]!\n"
-            f"But {x.shape} is received!"
-        )
+        return x * self.scale + self.bias.view(1, -1, 1, 1)
 
 
 class FirstBlock(nn.Module):
@@ -233,7 +190,6 @@ class FirstBlock(nn.Module):
         use_wscale=False,
         wscale_gain=np.sqrt(2.0),
         use_bn=False,
-        activation_type="lrelu",
     ):
         super().__init__()
 
@@ -247,15 +203,8 @@ class FirstBlock(nn.Module):
         )
         self.scale = wscale_gain / np.sqrt(in_channels * 3 * 3) if use_wscale else 1.0
         self.bn = BatchNormLayer(channels=out_channels) if use_bn else nn.Identity()
+        self.activate = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
-        if activation_type == "linear":
-            self.activate = nn.Identity()
-        elif activation_type == "lrelu":
-            self.activate = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-        else:
-            raise NotImplementedError(
-                f"Not implemented activation function: " f"{activation_type}!"
-            )
         # self = FirstBlock(
         #   (conv): Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
         #   (bn): BatchNormLayer(
@@ -268,14 +217,13 @@ class FirstBlock(nn.Module):
         # use_wscale = False
         # wscale_gain = 1.4142135623730951
         # use_bn = True
-        # activation_type = 'lrelu'
 
     def forward(self, x):
         return self.activate(self.bn(self.conv(x) * self.scale))
 
 
-class ResBlock(nn.Module):
-    """Implements the residual block.
+class ResBlock1(nn.Module):
+    """Implements the residual block1 -- with shortcut.
 
     Usually, each residual block contains two convolutional layers, each of which
     is followed by batch normalization layer and activation layer.
@@ -288,42 +236,20 @@ class ResBlock(nn.Module):
         use_wscale=False,
         wscale_gain=np.sqrt(2.0),
         use_bn=False,
-        activation_type="lrelu",
     ):
-        """Initializes the class with block settings.
-
-        Args:
-          in_channels: Number of channels of the input tensor fed into this block.
-          out_channels: Number of channels of the output tensor.
-          kernel_size: Size of the convolutional kernels.
-          stride: Stride parameter for convolution operation.
-          padding: Padding parameter for convolution operation.
-          use_wscale: Whether to use `wscale` layer.
-          wscale_gain: The gain factor for `wscale` layer.
-          use_bn: Whether to use batch normalization layer.
-          activation_type: Type of activation. Support `linear` and `lrelu`.
-
-        Raises:
-          NotImplementedError: If the input `activation_type` is not supported.
-        """
         super().__init__()
 
         # Add shortcut if needed.
-        if in_channels != out_channels:
-            self.add_shortcut = True
-            self.conv = nn.Conv2d(
-                in_channels=in_channels,
-                out_channels=out_channels,
-                kernel_size=1,
-                stride=1,
-                padding=0,
-                bias=False,
-            )
-            self.scale = wscale_gain / np.sqrt(in_channels) if use_wscale else 1.0
-            self.bn = BatchNormLayer(channels=out_channels) if use_bn else nn.Identity()
-        else:
-            self.add_shortcut = False
-            self.identity = nn.Identity()
+        self.conv = nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=1,
+            stride=1,
+            padding=0,
+            bias=False,
+        )
+        self.scale = wscale_gain / np.sqrt(in_channels) if use_wscale else 1.0
+        self.bn = BatchNormLayer(channels=out_channels) if use_bn else nn.Identity()
 
         hidden_channels = min(in_channels, out_channels)
 
@@ -365,21 +291,76 @@ class ResBlock(nn.Module):
             gain=wscale_gain,
         )
         self.bn2 = BatchNormLayer(channels=out_channels) if use_bn else nn.Identity()
-
-        if activation_type == "linear":
-            self.activate = nn.Identity()
-        elif activation_type == "lrelu":
-            self.activate = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-        else:
-            raise NotImplementedError(
-                f"Not implemented activation function: " f"{activation_type}!"
-            )
+        self.activate = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
     def forward(self, x):
-        if self.add_shortcut:
-            y = self.activate(self.bn(self.conv(x) * self.scale))
-        else:
-            y = self.identity(x)
+        # self.add_shortcut == True or False
+        y = self.activate(self.bn(self.conv(x) * self.scale))
+        x = self.activate(self.bn1(self.wscale1(self.conv1(x) / self.scale1)))
+        x = self.activate(self.bn2(self.wscale2(self.conv2(x) / self.scale2)))
+        return x + y
+
+class ResBlock2(nn.Module):
+    """Implements the residual block1 -- without shortcut.
+
+    Usually, each residual block contains two convolutional layers, each of which
+    is followed by batch normalization layer and activation layer.
+    """
+
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        use_wscale=False,
+        wscale_gain=np.sqrt(2.0),
+        use_bn=False,
+    ):
+        super().__init__()
+
+        hidden_channels = min(in_channels, out_channels)
+
+        # First convolutional block.
+        self.conv1 = nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=hidden_channels,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=False,
+        )
+        self.scale1 = 1.0 if use_wscale else wscale_gain / np.sqrt(in_channels * 3 * 3)
+        # NOTE: WScaleLayer is employed to add bias.
+        self.wscale1 = WScaleLayer(
+            in_channels=in_channels,
+            out_channels=hidden_channels,
+            kernel_size=3,
+            gain=wscale_gain,
+        )
+        self.bn1 = BatchNormLayer(channels=hidden_channels) if use_bn else nn.Identity()
+
+        # Second convolutional block.
+        self.conv2 = nn.Conv2d(
+            in_channels=hidden_channels,
+            out_channels=out_channels,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=False,
+        )
+        self.scale2 = (
+            1.0 if use_wscale else wscale_gain / np.sqrt(hidden_channels * 3 * 3)
+        )
+        self.wscale2 = WScaleLayer(
+            in_channels=hidden_channels,
+            out_channels=out_channels,
+            kernel_size=3,
+            gain=wscale_gain,
+        )
+        self.bn2 = BatchNormLayer(channels=out_channels) if use_bn else nn.Identity()
+        self.activate = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+
+    def forward(self, x):
+        y = x
         x = self.activate(self.bn1(self.wscale1(self.conv1(x) / self.scale1)))
         x = self.activate(self.bn2(self.wscale2(self.conv2(x) / self.scale2)))
         return x + y

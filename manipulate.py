@@ -146,11 +146,8 @@ def main():
         start_distance=args.start_distance,
         end_distance=args.end_distance,
         step=step,
-        layerwise_manipulation=True,
         num_layers=generator.num_layers,
         manipulate_layers=manipulate_layers,
-        is_code_layerwise=True,
-        is_boundary_layerwise=True,
     )
 
     for img_idx in tqdm(range(num_images), leave=False):

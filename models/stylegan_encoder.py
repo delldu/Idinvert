@@ -28,6 +28,8 @@ class StyleGANEncoder(BaseEncoder):
         self.encoder_channels_max = getattr(self, "encoder_channels_max", 1024)
         self.use_wscale = getattr(self, "use_wscale", False)
         self.use_bn = getattr(self, "use_bn", False)
+        
+
         self.net = StyleGANEncoderNet(
             resolution=self.resolution,
             w_space_dim=self.w_space_dim,
@@ -70,7 +72,8 @@ class StyleGANEncoder(BaseEncoder):
 
         if self.use_cuda:
             torch.cuda.empty_cache()
-
+        pdb.set_trace()
+        
         return results
 
     def encode(self, images, **kwargs):

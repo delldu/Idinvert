@@ -49,7 +49,7 @@ def parse_args():
     parser.add_argument(
         "--num_results",
         type=int,
-        default=5,
+        default=2,
         help="Number of intermediate optimization results to "
         "save for each sample. (default: 5)",
     )
@@ -125,6 +125,7 @@ def main():
         image_name = os.path.splitext(os.path.basename(image_path))[0]
         image = resize_image(load_image(image_path), (image_size, image_size))
         code, viz_results = inverter.easy_invert(image, num_viz=args.num_results)
+
         latent_codes.append(code)
         save_image(f"{output_dir}/{image_name}_ori.png", image)
         save_image(f"{output_dir}/{image_name}_enc.png", viz_results[1])

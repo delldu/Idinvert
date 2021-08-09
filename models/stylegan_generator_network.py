@@ -116,7 +116,6 @@ class StyleGANGeneratorNet(nn.Module):
             input_space_dim=self.z_space_dim,
             hidden_space_dim=self.fmaps_max,
             final_space_dim=mapping_space_dim,
-            label_size=self.label_size,
             num_layers=self.num_mapping_layers,
         )
         self.truncation = TruncationModule(
@@ -138,12 +137,6 @@ class StyleGANGeneratorNet(nn.Module):
             fmaps_max=self.fmaps_max,
         )
 
-    def forward(self, z, l=None):
-        w = self.mapping(z, l)
-        w = self.truncation(w)
-        x = self.synthesis(w)
-        return x
-
 
 class MappingModule(nn.Module):
     """Implements the latent space mapping module.
@@ -156,53 +149,29 @@ class MappingModule(nn.Module):
         input_space_dim=512,
         hidden_space_dim=512,
         final_space_dim=512,
-        label_size=0,
         num_layers=8,
-        normalize_input=True,
     ):
         super().__init__()
 
         self.input_space_dim = input_space_dim
-        self.label_size = label_size
         self.num_layers = num_layers
 
-        self.norm = PixelNormLayer() if normalize_input else nn.Identity()
+        self.norm = PixelNormLayer()
 
         for i in range(num_layers):
-            dim_mul = 2 if label_size else 1
+            dim_mul = 1
             in_dim = input_space_dim * dim_mul if i == 0 else hidden_space_dim
             out_dim = final_space_dim if i == (num_layers - 1) else hidden_space_dim
             self.add_module(f"dense{i}", DenseBlock(in_dim, out_dim))
-        if label_size:
-            self.label_weight = nn.Parameter(torch.randn(label_size, input_space_dim))
+        # input_space_dim = 512
+        # hidden_space_dim = 512
+        # final_space_dim = 7168
+        # num_layers = 8
+
 
     def forward(self, z, l=None):
-        if z.ndim != 2 or z.shape[1] != self.input_space_dim:
-            raise ValueError(
-                f"Input latent code should be with shape [batch_size, "
-                f"input_dim], where `input_dim` equals to "
-                f"{self.input_space_dim}!\n"
-                f"But {z.shape} is received!"
-            )
-        if self.label_size:
-            if l is None:
-                raise ValueError(
-                    f"Model requires an additional label (with size "
-                    f"{self.label_size}) as inputs, but no label is "
-                    f"received!"
-                )
-            if l.ndim != 2 or l.shape != (z.shape[0], self.label_size):
-                raise ValueError(
-                    f"Input label should be with shape [batch_size, "
-                    f"label_size], where `batch_size` equals to that of "
-                    f"latent codes ({z.shape[0]}) and `label_size` equals "
-                    f"to {self.label_size}!\n"
-                    f"But {l.shape} is received!"
-                )
-            embedding = torch.matmul(l, self.label_weight)
-            z = torch.cat((z, embedding), dim=1)
-
         w = self.norm(z)
+        # num_layers = 8
         for i in range(self.num_layers):
             w = self.__getattr__(f"dense{i}")(w)
         return w
@@ -224,6 +193,12 @@ class TruncationModule(nn.Module):
         self.num_layers = num_layers
         self.w_space_dim = w_space_dim
         self.repeat_w = repeat_w
+        # num_layers = 14
+        # w_space_dim = 512
+        # repeat_w = False
+        # truncation_psi = 0.7
+        # truncation_layers = 8
+
         if truncation_psi is not None and truncation_layers is not None:
             self.use_truncation = True
         else:
@@ -239,7 +214,11 @@ class TruncationModule(nn.Module):
         self.register_buffer("truncation", torch.from_numpy(coefs))
 
     def forward(self, w):
+        pdb.set_trace()
+
+        print("TruncationModule: w.ndim == ", w.ndim, "self.use_truncation == ", self.use_truncation)
         if w.ndim == 2:
+            pdb.set_trace()
             if self.repeat_w:
                 assert w.shape[1] == self.w_space_dim
                 w = w.view(-1, 1, self.w_space_dim).repeat(1, self.num_layers, 1)
@@ -248,6 +227,8 @@ class TruncationModule(nn.Module):
                 w = w.view(-1, self.num_layers, self.w_space_dim)
         assert w.ndim == 3 and w.shape[1:] == (self.num_layers, self.w_space_dim)
         if self.use_truncation:
+            pdb.set_trace()
+
             w_avg = self.w_avg.view(1, 1, self.w_space_dim)
             w = w_avg + (w - w_avg) * self.truncation
         return w
@@ -272,6 +253,15 @@ class SynthesisModule(nn.Module):
         fmaps_max=512,
     ):
         super().__init__()
+        # init_resolution = 4
+        # resolution = 256
+        # w_space_dim = 512
+        # image_channels = 3
+        # final_tanh = True
+        # fused_scale = 'auto'
+        # randomize_noise = False
+        # fmaps_base = 16384
+        # fmaps_max = 512
 
         self.init_res = init_resolution
         self.init_res_log2 = int(np.log2(self.init_res))
@@ -299,7 +289,7 @@ class SynthesisModule(nn.Module):
                         init_resolution=self.init_res,
                         channels=self.get_nf(res),
                         w_space_dim=self.w_space_dim,
-                        randomize_noise=randomize_noise,
+                        randomize_noise=False,
                     ),
                 )
             else:
@@ -314,7 +304,7 @@ class SynthesisModule(nn.Module):
                         in_channels=self.get_nf(res // 2),
                         out_channels=self.get_nf(res),
                         w_space_dim=self.w_space_dim,
-                        randomize_noise=randomize_noise,
+                        randomize_noise=False,
                         fused_scale=fused_scale,
                     ),
                 )
@@ -327,7 +317,7 @@ class SynthesisModule(nn.Module):
                     in_channels=self.get_nf(res),
                     out_channels=self.get_nf(res),
                     w_space_dim=self.w_space_dim,
-                    randomize_noise=randomize_noise,
+                    randomize_noise=False,
                 ),
             )
 
@@ -357,6 +347,9 @@ class SynthesisModule(nn.Module):
             )
 
         lod = self.lod.cpu().tolist()
+        # (Pdb) self.lod -- Parameter containing: tensor(0., device='cuda:0', requires_grad=True)
+        # self.init_res_log2 -- 2
+        # self.final_res_log2 -- 8
         for res_log2 in range(self.init_res_log2, self.final_res_log2 + 1):
             if res_log2 + lod <= self.final_res_log2:
                 block_idx = res_log2 - self.init_res_log2
@@ -395,11 +388,6 @@ class InstanceNormLayer(nn.Module):
         self.eps = epsilon
 
     def forward(self, x):
-        if x.ndim != 4:
-            raise ValueError(
-                f"The input tensor should be with shape [batch_size, "
-                f"channel, height, width], but {x.shape} is received!"
-            )
         x = x - torch.mean(x, dim=[2, 3], keepdim=True)
         x = x / torch.sqrt(torch.mean(x ** 2, dim=[2, 3], keepdim=True) + self.eps)
         return x
@@ -452,16 +440,7 @@ class NoiseApplyingLayer(nn.Module):
         self.weight = nn.Parameter(torch.zeros(channels))
 
     def forward(self, x):
-        if x.ndim != 4:
-            raise ValueError(
-                f"The input tensor should be with shape [batch_size, "
-                f"channel, height, width], but {x.shape} is received!"
-            )
-        if self.randomize_noise:
-            noise = torch.randn(x.shape[0], 1, self.res, self.res).to(x)
-        else:
-            noise = self.noise
-        return x + noise * self.weight.view(1, -1, 1, 1)
+        return x + self.noise * self.weight.view(1, -1, 1, 1)
 
 
 class StyleModulationLayer(nn.Module):
@@ -478,15 +457,10 @@ class StyleModulationLayer(nn.Module):
             wscale_lr_multiplier=1.0,
             activation_type="linear",
         )
+        # channels = 512
+        # w_space_dim = 512
 
     def forward(self, x, w):
-        if w.ndim != 2 or w.shape[1] != self.w_space_dim:
-            raise ValueError(
-                f"The input tensor should be with shape [batch_size, "
-                f"w_space_dim], where `w_space_dim` equals to "
-                f"{self.w_space_dim}!\n"
-                f"But {x.shape} is received!"
-            )
         style = self.dense(w)
         style = style.view(-1, 2, self.channels, 1, 1)
         return x * (style[:, 0] + 1) + style[:, 1]
@@ -515,15 +489,7 @@ class WScaleLayer(nn.Module):
         self.lr_multiplier = lr_multiplier
 
     def forward(self, x):
-        if x.ndim == 4:
-            return x * self.scale + self.bias.view(1, -1, 1, 1) * self.lr_multiplier
-        if x.ndim == 2:
-            return x * self.scale + self.bias.view(1, -1) * self.lr_multiplier
-        raise ValueError(
-            f"The input tensor should be with shape [batch_size, "
-            f"channel, height, width], or [batch_size, channel]!\n"
-            f"But {x.shape} is received!"
-        )
+        return x * self.scale + self.bias.view(1, -1) * self.lr_multiplier
 
 
 class EpilogueBlock(nn.Module):
@@ -664,6 +630,7 @@ class UpConvBlock(nn.Module):
 
     def forward(self, x, w):
         if self.fused_scale:
+            # ==> pdb.set_trace()
             kernel = self.weight * self.scale
             kernel = F.pad(kernel, (0, 0, 0, 0, 1, 1, 1, 1), "constant", 0.0)
             kernel = (
@@ -672,6 +639,7 @@ class UpConvBlock(nn.Module):
             kernel = kernel.permute(2, 3, 0, 1)
             x = F.conv_transpose2d(x, kernel, stride=2, padding=1)
         else:
+            # ==> pdb.set_trace()
             x = self.upsample(x)
             x = self.conv(x) * self.scale
         x = self.blur(x)
@@ -800,6 +768,14 @@ class DenseBlock(nn.Module):
           NotImplementedError: If the input `activation_type` is not supported.
         """
         super().__init__()
+        # in_channels = 512
+        # out_channels = 512
+        # add_bias = False
+        # wscale_gain = 1.4142135623730951
+        # wscale_lr_multiplier = 0.01
+        # activation_type = 'lrelu'
+
+
         self.fc = nn.Linear(
             in_features=in_channels, out_features=out_channels, bias=add_bias
         )
@@ -812,16 +788,10 @@ class DenseBlock(nn.Module):
         )
         if activation_type == "linear":
             self.activate = nn.Identity()
-        elif activation_type == "lrelu":
+        else: # activation_type == "lrelu"
             self.activate = nn.LeakyReLU(negative_slope=0.2, inplace=True)
-        else:
-            raise NotImplementedError(
-                f"Not implemented activation function: " f"{activation_type}!"
-            )
 
     def forward(self, x):
-        if x.ndim != 2:
-            x = x.view(x.shape[0], -1)
         x = self.fc(x)
         x = self.wscale(x)
         x = self.activate(x)
