@@ -135,11 +135,10 @@ class StyleGANInverter(object):
                 f"channels!"
             )
 
-
         # self.G.channel_order ==  RGB
         if self.G.image_channels == 3 and self.G.channel_order == "BGR":
             image = image[:, :, ::-1]
-        
+
         # self.G.resolution == 256
         if image.shape[1:3] != [self.G.resolution, self.G.resolution]:
             image = cv2.resize(image, (self.G.resolution, self.G.resolution))
@@ -199,7 +198,7 @@ class StyleGANInverter(object):
         z = torch.Tensor(init_z).to(self.run_device)
         z.requires_grad = True
         # (Pdb) init_z.shape, init_z.min(), init_z.max() -- (1, 14, 512), -2.9277837, 3.3327289
- 
+
         optimizer = torch.optim.Adam([z], lr=self.learning_rate)
 
         viz_results = []

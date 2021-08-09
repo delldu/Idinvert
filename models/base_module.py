@@ -203,39 +203,6 @@ class BaseModule(object):
             return tensor.to(self.cpu_device).detach().numpy()
         raise ValueError(f"Unsupported input type `{dtype}`!")
 
-    def get_ont_hot_labels(self, num, labels=None):
-        """Gets ont-hot labels for conditional generation.
-
-        Args:
-          num: Number of labels to generate.
-          labels: Input labels as reference to generate one-hot labels. If set as
-            `None`, label `0` will be used by default. (default: None)
-
-        Returns:
-          Returns `None` if `self.label_size` is 0, otherwise, a `numpy.ndarray`
-            with shape [num, self.label_size] and dtype `np.float32`.
-        """
-        self.check_attr("label_size")
-        if self.label_size == 0:
-            return None
-
-        if labels is None:
-            labels = 0
-        labels = np.array(labels).reshape(-1)
-        if labels.size == 1:
-            labels = np.tile(labels, (num,))
-        assert labels.shape == (num,)
-        for label in labels:
-            if label >= self.label_size or label < 0:
-                raise ValueError(
-                    f"Label should be smaller than {self.label_size}, "
-                    f"but {label} is received!"
-                )
-
-        one_hot = np.zeros((num, self.label_size), dtype=np.int32)
-        one_hot[np.arange(num), labels] = 1
-        return one_hot
-
     def get_batch_inputs(self, inputs, batch_size=None):
         """Gets inputs within mini-batch.
 

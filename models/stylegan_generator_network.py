@@ -23,9 +23,6 @@ _INIT_RES = 4
 # Fused-scale options allowed.
 _FUSED_SCALE_OPTIONS_ALLOWED = [True, False, "auto"]
 
-# Minimal resolution for `auto` fused-scale strategy.
-_AUTO_FUSED_SCALE_MIN_RES = 128
-
 
 class StyleGANGeneratorNet(nn.Module):
     """Defines the generator network in StyleGAN.
@@ -39,89 +36,47 @@ class StyleGANGeneratorNet(nn.Module):
         z_space_dim=512,
         w_space_dim=512,
         num_mapping_layers=8,
-        repeat_w=True,
         image_channels=3,
-        final_tanh=False,
-        label_size=0,
-        fused_scale="auto",
         truncation_psi=0.7,
         truncation_layers=8,
-        randomize_noise=False,
-        fmaps_base=16 << 10,
-        fmaps_max=512,
     ):
-        """Initializes the generator with basic settings.
-
-        Args:
-          resolution: The resolution of the output image.
-          z_space_dim: Dimension of the initial latent space. (default: 512)
-          w_space_dim: Dimension of the disentangled latent space. (default: 512)
-          num_mapping_layers: Number of fully-connected layers to map Z space to W
-            space. (default: 8)
-          repeat_w: Whether to use same w for different layers. (default: True)
-          image_channels: Number of channels of output image. (default: 3)
-          final_tanh: Whether to use tanh to control pixel range. (default: False)
-          label_size: Size of additional labels. (default: 0)
-          fused_scale: If set as `True`, `conv2d_transpose` is used for upscaling.
-            If set as `False`, `upsample + conv2d` is used for upscaling. If set as
-            `auto`, `upsample + conv2d` is used for bottom layers until resolution
-            reaches `_AUTO_FUSED_SCALE_MIN_RES`. (default: `auto`)
-          truncation_psi: Style strength multiplier for the truncation trick.
-            `None` or `1.0` indicates no truncation. (default: 0.7)
-          truncation_layers: Number of layers for which to apply the truncation
-            trick. `None` or `0` indicates no truncation. (default: 8)
-          randomize_noise: Whether to add random noise for each convolutional layer.
-            (default: False)
-          fmaps_base: Base factor to compute number of feature maps for each layer.
-            (default: 16 << 10)
-          fmaps_max: Maximum number of feature maps in each layer. (default: 512)
-
-        Raises:
-          ValueError: If the input `resolution` is not supported, or `fused_scale`
-            is not supported.
-        """
         super().__init__()
+        # resolution = 256
+        # z_space_dim = 512
+        # w_space_dim = 512
+        # num_mapping_layers = 8
+        # image_channels = 3
+        # truncation_psi = 0.7
+        # truncation_layers = 8
 
         if resolution not in _RESOLUTIONS_ALLOWED:
             raise ValueError(
                 f"Invalid resolution: {resolution}!\n"
                 f"Resolutions allowed: {_RESOLUTIONS_ALLOWED}."
             )
-        if fused_scale not in _FUSED_SCALE_OPTIONS_ALLOWED:
-            raise ValueError(
-                f"Invalid fused-scale option: {fused_scale}!\n"
-                f"Options allowed: {_FUSED_SCALE_OPTIONS_ALLOWED}."
-            )
+
 
         self.init_res = _INIT_RES
         self.resolution = resolution
         self.z_space_dim = z_space_dim
         self.w_space_dim = w_space_dim
         self.num_mapping_layers = num_mapping_layers
-        self.repeat_w = repeat_w
         self.image_channels = image_channels
-        self.final_tanh = final_tanh
-        self.label_size = label_size
-        self.fused_scale = fused_scale
         self.truncation_psi = truncation_psi
         self.truncation_layers = truncation_layers
-        self.randomize_noise = randomize_noise
-        self.fmaps_base = fmaps_base
-        self.fmaps_max = fmaps_max
 
         self.num_layers = int(np.log2(self.resolution // self.init_res * 2)) * 2
 
-        mapping_space_dim = self.w_space_dim * (1 if repeat_w else self.num_layers)
+        mapping_space_dim = self.w_space_dim * self.num_layers
         self.mapping = MappingModule(
             input_space_dim=self.z_space_dim,
-            hidden_space_dim=self.fmaps_max,
+            hidden_space_dim=512,
             final_space_dim=mapping_space_dim,
             num_layers=self.num_mapping_layers,
         )
         self.truncation = TruncationModule(
             num_layers=self.num_layers,
             w_space_dim=self.w_space_dim,
-            repeat_w=self.repeat_w,
             truncation_psi=self.truncation_psi,
             truncation_layers=self.truncation_layers,
         )
@@ -130,11 +85,6 @@ class StyleGANGeneratorNet(nn.Module):
             resolution=self.resolution,
             w_space_dim=self.w_space_dim,
             image_channels=self.image_channels,
-            final_tanh=self.final_tanh,
-            fused_scale=self.fused_scale,
-            randomize_noise=self.randomize_noise,
-            fmaps_base=self.fmaps_base,
-            fmaps_max=self.fmaps_max,
         )
 
 
@@ -168,7 +118,6 @@ class MappingModule(nn.Module):
         # final_space_dim = 7168
         # num_layers = 8
 
-
     def forward(self, z, l=None):
         w = self.norm(z)
         # num_layers = 8
@@ -184,7 +133,6 @@ class TruncationModule(nn.Module):
         self,
         num_layers,
         w_space_dim=512,
-        repeat_w=True,
         truncation_psi=0.7,
         truncation_layers=8,
     ):
@@ -192,10 +140,8 @@ class TruncationModule(nn.Module):
 
         self.num_layers = num_layers
         self.w_space_dim = w_space_dim
-        self.repeat_w = repeat_w
         # num_layers = 14
         # w_space_dim = 512
-        # repeat_w = False
         # truncation_psi = 0.7
         # truncation_layers = 8
 
@@ -215,16 +161,17 @@ class TruncationModule(nn.Module):
 
     def forward(self, w):
         pdb.set_trace()
-
-        print("TruncationModule: w.ndim == ", w.ndim, "self.use_truncation == ", self.use_truncation)
+        # xxxx8888
+        print(
+            "TruncationModule: w.ndim == ",
+            w.ndim,
+            "self.use_truncation == ",
+            self.use_truncation,
+        )
         if w.ndim == 2:
             pdb.set_trace()
-            if self.repeat_w:
-                assert w.shape[1] == self.w_space_dim
-                w = w.view(-1, 1, self.w_space_dim).repeat(1, self.num_layers, 1)
-            else:
-                assert w.shape[1] == self.w_space_dim * self.num_layers
-                w = w.view(-1, self.num_layers, self.w_space_dim)
+            assert w.shape[1] == self.w_space_dim * self.num_layers
+            w = w.view(-1, self.num_layers, self.w_space_dim)
         assert w.ndim == 3 and w.shape[1:] == (self.num_layers, self.w_space_dim)
         if self.use_truncation:
             pdb.set_trace()
@@ -246,31 +193,18 @@ class SynthesisModule(nn.Module):
         resolution=1024,
         w_space_dim=512,
         image_channels=3,
-        final_tanh=False,
-        fused_scale="auto",
-        randomize_noise=False,
-        fmaps_base=16 << 10,
-        fmaps_max=512,
     ):
         super().__init__()
         # init_resolution = 4
         # resolution = 256
         # w_space_dim = 512
         # image_channels = 3
-        # final_tanh = True
-        # fused_scale = 'auto'
-        # randomize_noise = False
-        # fmaps_base = 16384
-        # fmaps_max = 512
 
         self.init_res = init_resolution
         self.init_res_log2 = int(np.log2(self.init_res))
         self.resolution = resolution
         self.final_res_log2 = int(np.log2(self.resolution))
         self.w_space_dim = w_space_dim
-        self.fused_scale = fused_scale
-        self.fmaps_base = fmaps_base
-        self.fmaps_max = fmaps_max
 
         self.num_layers = (self.final_res_log2 - self.init_res_log2 + 1) * 2
 
@@ -289,25 +223,29 @@ class SynthesisModule(nn.Module):
                         init_resolution=self.init_res,
                         channels=self.get_nf(res),
                         w_space_dim=self.w_space_dim,
-                        randomize_noise=False,
                     ),
                 )
             else:
-                if self.fused_scale == "auto":
-                    fused_scale = res >= _AUTO_FUSED_SCALE_MIN_RES
+                if (res >= 128):
+                    self.add_module(
+                        f"layer{2 * block_idx}",
+                        UpConvBlockScale(
+                            resolution=res,
+                            in_channels=self.get_nf(res // 2),
+                            out_channels=self.get_nf(res),
+                            w_space_dim=self.w_space_dim,
+                        ),
+                    )
                 else:
-                    fused_scale = self.fused_scale
-                self.add_module(
-                    f"layer{2 * block_idx}",
-                    UpConvBlock(
-                        resolution=res,
-                        in_channels=self.get_nf(res // 2),
-                        out_channels=self.get_nf(res),
-                        w_space_dim=self.w_space_dim,
-                        randomize_noise=False,
-                        fused_scale=fused_scale,
-                    ),
-                )
+                    self.add_module(
+                        f"layer{2 * block_idx}",
+                        UpConvBlock(
+                            resolution=res,
+                            in_channels=self.get_nf(res // 2),
+                            out_channels=self.get_nf(res),
+                            w_space_dim=self.w_space_dim,
+                        ),
+                    )
 
             # Second convolution layer for each resolution.
             self.add_module(
@@ -317,7 +255,6 @@ class SynthesisModule(nn.Module):
                     in_channels=self.get_nf(res),
                     out_channels=self.get_nf(res),
                     w_space_dim=self.w_space_dim,
-                    randomize_noise=False,
                 ),
             )
 
@@ -330,26 +267,18 @@ class SynthesisModule(nn.Module):
             )
 
         self.upsample = ResolutionScalingLayer()
-        self.final_activate = nn.Tanh() if final_tanh else nn.Identity()
+        self.final_activate = nn.Tanh()
 
     def get_nf(self, res):
         """Gets number of feature maps according to current resolution."""
-        return min(self.fmaps_base // res, self.fmaps_max)
+        return min((16<<10) // res, 512)
 
     def forward(self, w):
-        if w.ndim != 3 or w.shape[1:] != (self.num_layers, self.w_space_dim):
-            raise ValueError(
-                f"The input tensor should be with shape [batch_size, "
-                f"num_layers, w_space_dim], where "
-                f"`num_layers` equals to {self.num_layers}, and "
-                f"`w_space_dim` equals to {self.w_space_dim}!\n"
-                f"But {w.shape} is received!"
-            )
-
         lod = self.lod.cpu().tolist()
         # (Pdb) self.lod -- Parameter containing: tensor(0., device='cuda:0', requires_grad=True)
         # self.init_res_log2 -- 2
         # self.final_res_log2 -- 8
+        # xxxx8888
         for res_log2 in range(self.init_res_log2, self.final_res_log2 + 1):
             if res_log2 + lod <= self.final_res_log2:
                 block_idx = res_log2 - self.init_res_log2
@@ -432,9 +361,8 @@ class BlurLayer(nn.Module):
 class NoiseApplyingLayer(nn.Module):
     """Implements the noise applying layer."""
 
-    def __init__(self, resolution, channels, randomize_noise=False):
+    def __init__(self, resolution, channels):
         super().__init__()
-        self.randomize_noise = randomize_noise
         self.res = resolution
         self.register_buffer("noise", torch.randn(1, 1, self.res, self.res))
         self.weight = nn.Parameter(torch.zeros(channels))
@@ -500,11 +428,10 @@ class EpilogueBlock(nn.Module):
         resolution,
         channels,
         w_space_dim=512,
-        randomize_noise=False,
         normalization_fn="instance",
     ):
         super().__init__()
-        self.apply_noise = NoiseApplyingLayer(resolution, channels, randomize_noise)
+        self.apply_noise = NoiseApplyingLayer(resolution, channels)
         self.bias = nn.Parameter(torch.zeros(channels))
         self.activate = nn.LeakyReLU(negative_slope=0.2, inplace=True)
         if normalization_fn == "pixel":
@@ -534,8 +461,7 @@ class FirstConvBlock(nn.Module):
     """
 
     def __init__(
-        self, init_resolution, channels, w_space_dim=512, randomize_noise=False
-    ):
+        self, init_resolution, channels, w_space_dim=512):
         super().__init__()
         self.const = nn.Parameter(
             torch.ones(1, channels, init_resolution, init_resolution)
@@ -544,7 +470,6 @@ class FirstConvBlock(nn.Module):
             resolution=init_resolution,
             channels=channels,
             w_space_dim=w_space_dim,
-            randomize_noise=randomize_noise,
         )
 
     def forward(self, w):
@@ -555,9 +480,6 @@ class FirstConvBlock(nn.Module):
 
 class UpConvBlock(nn.Module):
     """Implements the convolutional block with upsampling.
-
-    Basically, this block is used as the first convolutional block for each
-    resolution, which will execute upsampling.
     """
 
     def __init__(
@@ -570,53 +492,23 @@ class UpConvBlock(nn.Module):
         padding=1,
         dilation=1,
         add_bias=False,
-        fused_scale=False,
         wscale_gain=np.sqrt(2.0),
         wscale_lr_multiplier=1.0,
         w_space_dim=512,
-        randomize_noise=False,
     ):
-        """Initializes the class with block settings.
-
-        Args:
-          resolution: Spatial resolution of current layer.
-          in_channels: Number of channels of the input tensor fed into this block.
-          out_channels: Number of channels (kernels) of the output tensor.
-          kernel_size: Size of the convolutional kernel.
-          stride: Stride parameter for convolution operation.
-          padding: Padding parameter for convolution operation.
-          dilation: Dilation rate for convolution operation.
-          add_bias: Whether to add bias onto the convolutional result.
-          fused_scale: Whether to fuse `upsample` and `conv2d` together, resulting
-            in `conv2d_transpose`.
-          wscale_gain: The gain factor for `wscale` layer.
-          wscale_lr_multiplier: The learning rate multiplier factor for `wscale`
-            layer.
-          w_space_dim: The dimension of disentangled latent space, w. This is used
-            for style modulation.
-          randomize_noise: Whether to add random noise.
-        """
         super().__init__()
 
-        self.fused_scale = fused_scale
-
-        if self.fused_scale:
-            self.weight = nn.Parameter(
-                torch.randn(kernel_size, kernel_size, in_channels, out_channels)
-            )
-
-        else:
-            self.upsample = ResolutionScalingLayer()
-            self.conv = nn.Conv2d(
-                in_channels=in_channels,
-                out_channels=out_channels,
-                kernel_size=kernel_size,
-                stride=stride,
-                padding=padding,
-                dilation=dilation,
-                groups=1,
-                bias=add_bias,
-            )
+        self.upsample = ResolutionScalingLayer()
+        self.conv = nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            groups=1,
+            bias=add_bias,
+        )
 
         fan_in = in_channels * kernel_size * kernel_size
         self.scale = wscale_gain / np.sqrt(fan_in) * wscale_lr_multiplier
@@ -625,23 +517,56 @@ class UpConvBlock(nn.Module):
             resolution=resolution,
             channels=out_channels,
             w_space_dim=w_space_dim,
-            randomize_noise=randomize_noise,
         )
 
     def forward(self, x, w):
-        if self.fused_scale:
-            # ==> pdb.set_trace()
-            kernel = self.weight * self.scale
-            kernel = F.pad(kernel, (0, 0, 0, 0, 1, 1, 1, 1), "constant", 0.0)
-            kernel = (
-                kernel[1:, 1:] + kernel[:-1, 1:] + kernel[1:, :-1] + kernel[:-1, :-1]
-            )
-            kernel = kernel.permute(2, 3, 0, 1)
-            x = F.conv_transpose2d(x, kernel, stride=2, padding=1)
-        else:
-            # ==> pdb.set_trace()
-            x = self.upsample(x)
-            x = self.conv(x) * self.scale
+        x = self.upsample(x)
+        x = self.conv(x) * self.scale
+        x = self.blur(x)
+        x = self.epilogue(x, w)
+        return x
+
+
+class UpConvBlockScale(nn.Module):
+    """Implements the convolutional block with scale upsampling.
+    """
+
+    def __init__(
+        self,
+        resolution,
+        in_channels,
+        out_channels,
+        kernel_size=3,
+        stride=1,
+        padding=1,
+        dilation=1,
+        add_bias=False,
+        wscale_gain=np.sqrt(2.0),
+        wscale_lr_multiplier=1.0,
+        w_space_dim=512,
+    ):
+        super().__init__()
+
+        self.weight = nn.Parameter(
+            torch.randn(kernel_size, kernel_size, in_channels, out_channels)
+        )
+        fan_in = in_channels * kernel_size * kernel_size
+        self.scale = wscale_gain / np.sqrt(fan_in) * wscale_lr_multiplier
+        self.blur = BlurLayer(channels=out_channels)
+        self.epilogue = EpilogueBlock(
+            resolution=resolution,
+            channels=out_channels,
+            w_space_dim=w_space_dim,
+        )
+
+    def forward(self, x, w):
+        kernel = self.weight * self.scale
+        kernel = F.pad(kernel, (0, 0, 0, 0, 1, 1, 1, 1), "constant", 0.0)
+        kernel = (
+            kernel[1:, 1:] + kernel[:-1, 1:] + kernel[1:, :-1] + kernel[:-1, :-1]
+        )
+        kernel = kernel.permute(2, 3, 0, 1)
+        x = F.conv_transpose2d(x, kernel, stride=2, padding=1)
         x = self.blur(x)
         x = self.epilogue(x, w)
         return x
@@ -667,7 +592,6 @@ class ConvBlock(nn.Module):
         wscale_gain=np.sqrt(2.0),
         wscale_lr_multiplier=1.0,
         w_space_dim=512,
-        randomize_noise=False,
     ):
         """Initializes the class with block settings.
 
@@ -685,7 +609,6 @@ class ConvBlock(nn.Module):
             layer.
           w_space_dim: The dimension of disentangled latent space, w. This is used
             for style modulation.
-          randomize_noise: Whether to add random noise.
         """
         super().__init__()
 
@@ -705,7 +628,6 @@ class ConvBlock(nn.Module):
             resolution=resolution,
             channels=out_channels,
             w_space_dim=w_space_dim,
-            randomize_noise=randomize_noise,
         )
 
     def forward(self, x, w):
@@ -768,13 +690,6 @@ class DenseBlock(nn.Module):
           NotImplementedError: If the input `activation_type` is not supported.
         """
         super().__init__()
-        # in_channels = 512
-        # out_channels = 512
-        # add_bias = False
-        # wscale_gain = 1.4142135623730951
-        # wscale_lr_multiplier = 0.01
-        # activation_type = 'lrelu'
-
 
         self.fc = nn.Linear(
             in_features=in_channels, out_features=out_channels, bias=add_bias
@@ -788,7 +703,7 @@ class DenseBlock(nn.Module):
         )
         if activation_type == "linear":
             self.activate = nn.Identity()
-        else: # activation_type == "lrelu"
+        else:  # activation_type == "lrelu"
             self.activate = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
     def forward(self, x):

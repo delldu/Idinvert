@@ -44,30 +44,16 @@ class StyleGANGenerator(BaseGenerator):
         self.z_space_dim = getattr(self, "z_space_dim", 512)
         self.w_space_dim = getattr(self, "w_space_dim", 512)
         self.num_mapping_layers = getattr(self, "num_mapping_layers", 8)
-        self.repeat_w = getattr(self, "repeat_w", True)
-        self.final_tanh = getattr(self, "final_tanh", False)
-        self.label_size = getattr(self, "label_size", 0)
-        self.fused_scale = getattr(self, "fused_scale", "auto")
         self.truncation_psi = model_settings.STYLEGAN_TRUNCATION_PSI
-        self.truncation_layers = model_settings.STYLEGAN_TRUNCATION_LAYERS
-        self.randomize_noise = model_settings.STYLEGAN_RANDOMIZE_NOISE
-        self.fmaps_base = getattr(self, "fmaps_base", 16 << 10)
-        self.fmaps_max = getattr(self, "fmaps_max", 512)
+        self.truncation_layers = 8
         self.net = StyleGANGeneratorNet(
             resolution=self.resolution,
             z_space_dim=self.z_space_dim,
             w_space_dim=self.w_space_dim,
             num_mapping_layers=self.num_mapping_layers,
-            repeat_w=self.repeat_w,
             image_channels=self.image_channels,
-            final_tanh=self.final_tanh,
-            label_size=self.label_size,
-            fused_scale=self.fused_scale,
             truncation_psi=self.truncation_psi,
             truncation_layers=self.truncation_layers,
-            randomize_noise=self.randomize_noise,
-            fmaps_base=self.fmaps_base,
-            fmaps_max=self.fmaps_max,
         )
         self.num_layers = self.net.num_layers
         self.model_specific_vars = ["truncation.truncation"]
@@ -149,7 +135,7 @@ class StyleGANGenerator(BaseGenerator):
 
         latent_space_type = latent_space_type.lower()
         results = {}
-        
+
         # latent_space_type == "wp"
         if latent_codes.ndim != 3 or latent_codes.shape[1:] != (
             self.num_layers,

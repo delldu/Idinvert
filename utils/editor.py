@@ -280,7 +280,7 @@ def manipulate(
             f"Latent code shape {x.shape} and boundary shape " f"{b.shape} mismatch!"
         )
     num = x.shape[0]
-    code_shape = x.shape[2:] # x.shape[2:] -- (512,)
+    code_shape = x.shape[2:]  # x.shape[2:] -- (512,)
 
     x = x[:, np.newaxis]
     # x[:, np.newaxis].shape -- (20, 1, 14, 512)
