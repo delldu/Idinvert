@@ -14,14 +14,9 @@ import pdb
 
 __all__ = ["StyleGANGeneratorNet"]
 
-# Resolutions allowed.
-_RESOLUTIONS_ALLOWED = [8, 16, 32, 64, 128, 256, 512, 1024]
 
 # Initial resolution.
 _INIT_RES = 4
-
-# Fused-scale options allowed.
-_FUSED_SCALE_OPTIONS_ALLOWED = [True, False, "auto"]
 
 
 class StyleGANGeneratorNet(nn.Module):
@@ -48,13 +43,6 @@ class StyleGANGeneratorNet(nn.Module):
         # image_channels = 3
         # truncation_psi = 0.7
         # truncation_layers = 8
-
-        if resolution not in _RESOLUTIONS_ALLOWED:
-            raise ValueError(
-                f"Invalid resolution: {resolution}!\n"
-                f"Resolutions allowed: {_RESOLUTIONS_ALLOWED}."
-            )
-
 
         self.init_res = _INIT_RES
         self.resolution = resolution
@@ -89,10 +77,7 @@ class StyleGANGeneratorNet(nn.Module):
 
 
 class MappingModule(nn.Module):
-    """Implements the latent space mapping module.
-
-    Basically, this module executes several dense layers in sequence.
-    """
+    """Implements the latent space mapping module."""
 
     def __init__(
         self,
@@ -140,45 +125,17 @@ class TruncationModule(nn.Module):
 
         self.num_layers = num_layers
         self.w_space_dim = w_space_dim
-        # num_layers = 14
-        # w_space_dim = 512
-        # truncation_psi = 0.7
-        # truncation_layers = 8
-
-        if truncation_psi is not None and truncation_layers is not None:
-            self.use_truncation = True
-        else:
-            self.use_truncation = False
-            truncation_psi = 1.0
-            truncation_layers = 0
 
         self.register_buffer("w_avg", torch.zeros(w_space_dim))
-
+        
         layer_idx = np.arange(self.num_layers).reshape(1, self.num_layers, 1)
         coefs = np.ones_like(layer_idx, dtype=np.float32)
         coefs[layer_idx < truncation_layers] *= truncation_psi
         self.register_buffer("truncation", torch.from_numpy(coefs))
 
     def forward(self, w):
-        pdb.set_trace()
-        # xxxx8888
-        print(
-            "TruncationModule: w.ndim == ",
-            w.ndim,
-            "self.use_truncation == ",
-            self.use_truncation,
-        )
-        if w.ndim == 2:
-            pdb.set_trace()
-            assert w.shape[1] == self.w_space_dim * self.num_layers
-            w = w.view(-1, self.num_layers, self.w_space_dim)
-        assert w.ndim == 3 and w.shape[1:] == (self.num_layers, self.w_space_dim)
-        if self.use_truncation:
-            pdb.set_trace()
-
-            w_avg = self.w_avg.view(1, 1, self.w_space_dim)
-            w = w_avg + (w - w_avg) * self.truncation
-        return w
+        w_avg = self.w_avg.view(1, 1, self.w_space_dim)
+        return w_avg + (w - w_avg) * self.truncation
 
 
 class SynthesisModule(nn.Module):
@@ -205,11 +162,14 @@ class SynthesisModule(nn.Module):
         self.resolution = resolution
         self.final_res_log2 = int(np.log2(self.resolution))
         self.w_space_dim = w_space_dim
-
         self.num_layers = (self.final_res_log2 - self.init_res_log2 + 1) * 2
 
         # Level of detail (used for progressive training).
         self.lod = nn.Parameter(torch.zeros(()))
+
+        # range(self.init_res_log2, self.final_res_log2 + 1)
+        # -- range(2, 9)
+        # ==> self.layer0 -- self.layer13, self.output0 -- self.outpu6
 
         for res_log2 in range(self.init_res_log2, self.final_res_log2 + 1):
             res = 2 ** res_log2
@@ -226,7 +186,7 @@ class SynthesisModule(nn.Module):
                     ),
                 )
             else:
-                if (res >= 128):
+                if res >= 128:
                     self.add_module(
                         f"layer{2 * block_idx}",
                         UpConvBlockScale(
@@ -266,34 +226,44 @@ class SynthesisModule(nn.Module):
                 ),
             )
 
-        self.upsample = ResolutionScalingLayer()
+        # self.upsample = ResolutionScalingLayer()
         self.final_activate = nn.Tanh()
 
     def get_nf(self, res):
         """Gets number of feature maps according to current resolution."""
-        return min((16<<10) // res, 512)
+        return min((16 << 10) // res, 512)
 
     def forward(self, w):
-        lod = self.lod.cpu().tolist()
-        # (Pdb) self.lod -- Parameter containing: tensor(0., device='cuda:0', requires_grad=True)
         # self.init_res_log2 -- 2
         # self.final_res_log2 -- 8
-        # xxxx8888
-        for res_log2 in range(self.init_res_log2, self.final_res_log2 + 1):
-            if res_log2 + lod <= self.final_res_log2:
-                block_idx = res_log2 - self.init_res_log2
-                if block_idx == 0:
-                    x = self.__getattr__(f"layer{2 * block_idx}")(w[:, 2 * block_idx])
-                else:
-                    x = self.__getattr__(f"layer{2 * block_idx}")(
-                        x, w[:, 2 * block_idx]
-                    )
-                x = self.__getattr__(f"layer{2 * block_idx + 1}")(
-                    x, w[:, 2 * block_idx + 1]
-                )
-                image = self.__getattr__(f"output{block_idx}")(x)
-            else:
-                image = self.upsample(image)
+
+        # lod = self.lod.cpu().tolist()
+        # (Pdb) self.lod -- Parameter containing: tensor(0., device='cuda:0', requires_grad=True)
+        # for res_log2 in range(self.init_res_log2, self.final_res_log2 + 1):
+        #     if res_log2 + lod <= self.final_res_log2:
+        #         block_idx = res_log2 - self.init_res_log2
+        #         print("block_idx = ", block_idx)
+        #         if block_idx == 0:
+        #             x = self.__getattr__(f"layer{2 * block_idx}")(w[:, 2 * block_idx])
+        #         else:
+        #             x = self.__getattr__(f"layer{2 * block_idx}")(x, w[:, 2 * block_idx])
+        #         x = self.__getattr__(f"layer{2 * block_idx + 1}")(x, w[:, 2 * block_idx + 1])
+        #         image = self.__getattr__(f"output{block_idx}")(x)
+        #     else:
+        #         pdb.set_trace()
+        #         image = self.upsample(image)
+
+        x = self.layer0(w[:, 2 * 0])
+        x = self.layer1(x, w[:, 2 * 0 + 1])
+        # image = self.output0(x)
+
+        for block_idx in range(1, self.final_res_log2 + 1 - self.init_res_log2):
+            x = self.__getattr__(f"layer{2 * block_idx}")(x, w[:, 2 * block_idx])
+            x = self.__getattr__(f"layer{2 * block_idx + 1}")(
+                x, w[:, 2 * block_idx + 1]
+            )
+
+        image = self.output6(x)
         image = self.final_activate(image)
         return image
 
@@ -460,8 +430,7 @@ class FirstConvBlock(nn.Module):
     `ones(channels, init_resolution, init_resolution)`.
     """
 
-    def __init__(
-        self, init_resolution, channels, w_space_dim=512):
+    def __init__(self, init_resolution, channels, w_space_dim=512):
         super().__init__()
         self.const = nn.Parameter(
             torch.ones(1, channels, init_resolution, init_resolution)
@@ -479,8 +448,7 @@ class FirstConvBlock(nn.Module):
 
 
 class UpConvBlock(nn.Module):
-    """Implements the convolutional block with upsampling.
-    """
+    """Implements the convolutional block with upsampling."""
 
     def __init__(
         self,
@@ -528,8 +496,7 @@ class UpConvBlock(nn.Module):
 
 
 class UpConvBlockScale(nn.Module):
-    """Implements the convolutional block with scale upsampling.
-    """
+    """Implements the convolutional block with scale upsampling."""
 
     def __init__(
         self,
@@ -537,10 +504,6 @@ class UpConvBlockScale(nn.Module):
         in_channels,
         out_channels,
         kernel_size=3,
-        stride=1,
-        padding=1,
-        dilation=1,
-        add_bias=False,
         wscale_gain=np.sqrt(2.0),
         wscale_lr_multiplier=1.0,
         w_space_dim=512,
@@ -562,9 +525,7 @@ class UpConvBlockScale(nn.Module):
     def forward(self, x, w):
         kernel = self.weight * self.scale
         kernel = F.pad(kernel, (0, 0, 0, 0, 1, 1, 1, 1), "constant", 0.0)
-        kernel = (
-            kernel[1:, 1:] + kernel[:-1, 1:] + kernel[1:, :-1] + kernel[:-1, :-1]
-        )
+        kernel = kernel[1:, 1:] + kernel[:-1, 1:] + kernel[1:, :-1] + kernel[:-1, :-1]
         kernel = kernel.permute(2, 3, 0, 1)
         x = F.conv_transpose2d(x, kernel, stride=2, padding=1)
         x = self.blur(x)
@@ -585,10 +546,6 @@ class ConvBlock(nn.Module):
         in_channels,
         out_channels,
         kernel_size=3,
-        stride=1,
-        padding=1,
-        dilation=1,
-        add_bias=False,
         wscale_gain=np.sqrt(2.0),
         wscale_lr_multiplier=1.0,
         w_space_dim=512,
@@ -600,10 +557,6 @@ class ConvBlock(nn.Module):
           in_channels: Number of channels of the input tensor fed into this block.
           out_channels: Number of channels (kernels) of the output tensor.
           kernel_size: Size of the convolutional kernel.
-          stride: Stride parameter for convolution operation.
-          padding: Padding parameter for convolution operation.
-          dilation: Dilation rate for convolution operation.
-          add_bias: Whether to add bias onto the convolutional result.
           wscale_gain: The gain factor for `wscale` layer.
           wscale_lr_multiplier: The learning rate multiplier factor for `wscale`
             layer.
@@ -616,11 +569,11 @@ class ConvBlock(nn.Module):
             in_channels=in_channels,
             out_channels=out_channels,
             kernel_size=kernel_size,
-            stride=stride,
-            padding=padding,
-            dilation=dilation,
+            stride=1,
+            padding=1,
+            dilation=1,
             groups=1,
-            bias=add_bias,
+            bias=False,
         )
         fan_in = in_channels * kernel_size * kernel_size
         self.scale = wscale_gain / np.sqrt(fan_in) * wscale_lr_multiplier
@@ -670,7 +623,6 @@ class DenseBlock(nn.Module):
         self,
         in_channels,
         out_channels,
-        add_bias=False,
         wscale_gain=np.sqrt(2.0),
         wscale_lr_multiplier=0.01,
         activation_type="lrelu",
@@ -680,7 +632,6 @@ class DenseBlock(nn.Module):
         Args:
           in_channels: Number of channels of the input tensor fed into this block.
           out_channels: Number of channels of the output tensor.
-          add_bias: Whether to add bias onto the fully-connected result.
           wscale_gain: The gain factor for `wscale` layer.
           wscale_lr_multiplier: The learning rate multiplier factor for `wscale`
             layer.
@@ -692,7 +643,7 @@ class DenseBlock(nn.Module):
         super().__init__()
 
         self.fc = nn.Linear(
-            in_features=in_channels, out_features=out_channels, bias=add_bias
+            in_features=in_channels, out_features=out_channels, bias=False
         )
         self.wscale = WScaleLayer(
             in_channels=in_channels,

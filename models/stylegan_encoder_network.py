@@ -212,8 +212,7 @@ class FirstBlock(nn.Module):
 
 
 class ResBlock1(nn.Module):
-    """Implements the residual block1 -- with shortcut.
-    """
+    """Implements the residual block1 -- with shortcut."""
 
     def __init__(
         self,
@@ -282,8 +281,7 @@ class ResBlock1(nn.Module):
 
 
 class ResBlock2(nn.Module):
-    """Implements the residual block1 -- without shortcut.
-    """
+    """Implements the residual block1 -- without shortcut."""
 
     def __init__(
         self,
