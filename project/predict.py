@@ -19,7 +19,7 @@ from PIL import Image
 from tqdm import tqdm
 
 from data import grid_image
-from model import model_device, model_setenv, get_encoder, get_decoder
+from model import model_device, model_setenv, get_encoder, get_decoder, get_refiner
 
 if __name__ == "__main__":
     """Predict."""
@@ -41,14 +41,15 @@ if __name__ == "__main__":
     model_setenv()
     device = model_device()
 
-    encoder_model = get_encoder("models/stylegan2_encoder.pth")
-    encoder_model = encoder_model.to(device)
-    encoder_model.eval()
+    # encoder_model = get_encoder("models/stylegan2_encoder.pth")
+    # encoder_model = encoder_model.to(device)
+    # encoder_model.eval()
 
-    decoder_model = get_decoder("models/stylegan2_decoder.pth")
-    decoder_model = decoder_model.to(device)
-    decoder_model.eval()
+    # decoder_model = get_decoder("models/stylegan2_decoder.pth")
+    # decoder_model = decoder_model.to(device)
+    # decoder_model.eval()
 
+    model = get_refiner()
 
     totensor = transforms.ToTensor()
     toimage = transforms.ToPILImage()
@@ -63,8 +64,10 @@ if __name__ == "__main__":
         input_tensor = totensor(image).unsqueeze(0).to(device)
 
         with torch.no_grad():
-            wcode = encoder_model(input_tensor)
-            output_tensor = decoder_model(wcode)
+            wcode = model.encoder(input_tensor)
+            output_tensor1 = model.decoder(wcode)
+            refine_wcode = model(input_tensor)
+            output_tensor2 = model.decoder(refine_wcode)
 
-        image = grid_image([input_tensor, output_tensor], nrow=2)
+        image = grid_image([input_tensor, output_tensor1, output_tensor2], nrow=3)
         image.save("{}/image_{:02d}.jpg".format(args.output, index + 1))

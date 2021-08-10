@@ -8,7 +8,7 @@ import pdb
 # Initial resolution.
 _INIT_RES = 4
 
-
+# xxxx3333
 class StyleGANDecoderNet(nn.Module):
     """Defines the generator network in StyleGAN.
 
@@ -66,6 +66,7 @@ class StyleGANDecoderNet(nn.Module):
         )
 
 
+# xxxx3333
 class MappingModule(nn.Module):
     """Implements the latent space mapping module."""
 
@@ -101,6 +102,7 @@ class MappingModule(nn.Module):
         return w
 
 
+# xxxx3333
 class TruncationModule(nn.Module):
     """Implements the truncation module."""
 
@@ -256,7 +258,7 @@ class StyleGANDecoder(nn.Module):
         image = self.final_activate(image)
 
         # move image from [-1,0, 1,0] t0 [0, 1.0]
-        image = (image + 1.0)/2.0
+        image = (image + 1.0) / 2.0
 
         return image.clamp(0.0, 1.0)
 

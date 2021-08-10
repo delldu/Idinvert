@@ -9,17 +9,14 @@
 # ************************************************************************************/
 #
 
-import math
 import os
 import pdb  # For debug
-import sys
 
 import torch
-import torch.nn as nn
-from tqdm import tqdm
 
 from stylegan2_encoder import StyleGANEncoder
 from stylegan2_decoder import StyleGANDecoder
+from stylegan2_refiner import VGG16, StyleGANRefiner
 
 
 def model_load(model, path, prefix=""):
@@ -52,7 +49,6 @@ def get_encoder(checkpoint):
 
     model = StyleGANEncoder()
     model_load(model, checkpoint, prefix="")
-    model.eval()
 
     return model
 
@@ -62,122 +58,23 @@ def get_decoder(checkpoint):
 
     model = StyleGANDecoder()
     model_load(model, checkpoint, prefix="synthesis.")
-    model.eval()
 
     return model
 
 
-class Counter(object):
-    """Class Counter."""
+def get_vgg16(checkpoint):
+    """Create model."""
 
-    def __init__(self):
-        """Init average."""
+    model = VGG16()
+    model_load(model, checkpoint, prefix="")
 
-        self.reset()
-
-    def reset(self):
-        """Reset average."""
-
-        self.val = 0
-        self.avg = 0
-        self.sum = 0
-        self.count = 0
-
-    def update(self, val, n=1):
-        """Update average."""
-
-        self.val = val
-        self.sum += val * n
-        self.count += n
-        self.avg = self.sum / self.count
+    return model
 
 
-def train_epoch(loader, model, optimizer, device, tag=""):
-    """Trainning model ..."""
-
-    total_loss = Counter()
-
-    model.train()
-
-    #
-    # /************************************************************************************
-    # ***
-    # ***    MS: Define Loss Function
-    # ***
-    # ************************************************************************************/
-    #
-    loss_function = nn.L1Loss()
-
-    with tqdm(total=len(loader.dataset)) as t:
-        t.set_description(tag)
-
-        for data in loader:
-            images, targets = data
-            count = len(images)
-
-            # Transform data to device
-            images = images.to(device)
-            targets = targets.to(device)
-
-            predicts = model(images)
-
-            loss = loss_function(predicts, targets)
-            loss_value = loss.item()
-            if not math.isfinite(loss_value):
-                print("Loss is {}, stopping training".format(loss_value))
-                sys.exit(1)
-
-            # Update loss
-            total_loss.update(loss_value, count)
-
-            t.set_postfix(loss="{:.6f}".format(total_loss.avg))
-            t.update(count)
-
-            # Optimizer
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-        return total_loss.avg
-
-
-def valid_epoch(loader, model, device, tag=""):
-    """Validating model  ..."""
-
-    valid_loss = Counter()
-
-    model.eval()
-
-    #
-    # /************************************************************************************
-    # ***
-    # ***    MS: Define Loss Function
-    # ***
-    # ************************************************************************************/
-    #
-    loss_function = nn.L1Loss()
-
-    with tqdm(total=len(loader.dataset)) as t:
-        t.set_description(tag)
-
-        for data in loader:
-            images, targets = data
-            count = len(images)
-
-            # Transform data to device
-            images = images.to(device)
-            targets = targets.to(device)
-
-            # Predict results without calculating gradients
-            with torch.no_grad():
-                predicts = model(images)
-
-            loss = loss_function(predicts, targets)
-            loss_value = loss.item()
-
-            valid_loss.update(loss_value, count)
-            t.set_postfix(loss="{:.6f}".format(valid_loss.avg))
-            t.update(count)
+def get_refiner(checkpoint):
+    model = StyleGANRefiner()
+    # StyleGANRefiner auto loading checkpoint
+    return model
 
 
 def model_device():
