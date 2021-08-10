@@ -71,7 +71,7 @@ def get_vgg16(checkpoint):
     return model
 
 
-def get_refiner(checkpoint):
+def get_refiner():
     model = StyleGANRefiner()
     # StyleGANRefiner auto loading checkpoint
     return model

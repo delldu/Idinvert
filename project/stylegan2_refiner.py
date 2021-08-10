@@ -109,8 +109,8 @@ def get_tensor_value(tensor):
 class StyleGANRefiner(nn.Module):
     """Implements pixel-wise feature vector normalization layer."""
 
-    def __init__():
-        super(StyleGANRefiner).__init__()
+    def __init__(self):
+        super().__init__()
         self.epochs = 100
         self.learning_rate = 1e-2
         self.pixel_loss_weight = 1.0
