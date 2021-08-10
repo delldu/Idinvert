@@ -22,7 +22,7 @@ from stylegan2_encoder import StyleGANEncoder
 from stylegan2_decoder import StyleGANDecoder
 
 
-def model_load(model, path):
+def model_load(model, path, prefix=""):
     """Load model."""
 
     if not os.path.exists(path):
@@ -32,6 +32,9 @@ def model_load(model, path):
     state_dict = torch.load(path, map_location=lambda storage, loc: storage)
     target_state_dict = model.state_dict()
     for n, p in state_dict.items():
+        if len(prefix) > 0 and not n.startswith(prefix):
+            continue
+        n = n.replace(prefix, "")
         if n in target_state_dict.keys():
             target_state_dict[n].copy_(p)
         else:
@@ -48,7 +51,7 @@ def get_encoder(checkpoint):
     """Create model."""
 
     model = StyleGANEncoder()
-    model_load(model, checkpoint)
+    model_load(model, checkpoint, prefix="")
     model.eval()
 
     return model
@@ -58,7 +61,7 @@ def get_decoder(checkpoint):
     """Create model."""
 
     model = StyleGANDecoder()
-    model_load(model, checkpoint)
+    model_load(model, checkpoint, prefix="synthesis.")
     model.eval()
 
     return model

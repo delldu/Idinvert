@@ -9,7 +9,7 @@ import pdb
 _INIT_RES = 4
 
 
-class StyleGANDecoder(nn.Module):
+class StyleGANDecoderNet(nn.Module):
     """Defines the generator network in StyleGAN.
 
     NOTE: the generated images are with `RGB` color channels and range [-1, 1].
@@ -128,7 +128,7 @@ class TruncationModule(nn.Module):
         return w_avg + (w - w_avg) * self.truncation
 
 
-class SynthesisModule(nn.Module):
+class StyleGANDecoder(nn.Module):
     """Implements the image synthesis module.
 
     Basically, this module executes several convolutional layers in sequence.
@@ -137,7 +137,7 @@ class SynthesisModule(nn.Module):
     def __init__(
         self,
         init_resolution=4,
-        resolution=1024,
+        resolution=256,
         w_space_dim=512,
         image_channels=3,
     ):
@@ -246,7 +246,6 @@ class SynthesisModule(nn.Module):
         x = self.layer0(w[:, 2 * 0])
         x = self.layer1(x, w[:, 2 * 0 + 1])
         # image = self.output0(x)
-
         for block_idx in range(1, self.final_res_log2 + 1 - self.init_res_log2):
             x = self.__getattr__(f"layer{2 * block_idx}")(x, w[:, 2 * block_idx])
             x = self.__getattr__(f"layer{2 * block_idx + 1}")(
