@@ -254,7 +254,11 @@ class StyleGANDecoder(nn.Module):
 
         image = self.output6(x)
         image = self.final_activate(image)
-        return image
+
+        # move image from [-1,0, 1,0] t0 [0, 1.0]
+        image = (image + 1.0)/2.0
+
+        return image.clamp(0.0, 1.0)
 
 
 class PixelNormLayer(nn.Module):

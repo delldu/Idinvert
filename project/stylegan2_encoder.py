@@ -92,6 +92,7 @@ class StyleGANEncoder(nn.Module):
 
         # move x from [0.0, 1.0] to [-1.0, 1.0]
         x = 2.0 * (x - 0.5)
+        # x = x.transpose(2, 0, 1)
         for block_idx in range(self.num_blocks):
             if 0 < block_idx < self.num_blocks - 1:
                 x = self.downsample(x)

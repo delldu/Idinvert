@@ -64,7 +64,7 @@ if __name__ == "__main__":
 
         with torch.no_grad():
             wcode = encoder_model(input_tensor)
-            output_tensor = decoder_model(wcode).clamp(0, 1.0)
+            output_tensor = decoder_model(wcode)
 
         image = grid_image([input_tensor, output_tensor], nrow=2)
         image.save("{}/image_{:02d}.jpg".format(args.output, index + 1))
