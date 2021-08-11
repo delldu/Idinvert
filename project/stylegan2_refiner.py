@@ -23,7 +23,7 @@ from stylegan2_encoder import StyleGANEncoder
 from stylegan2_decoder import StyleGANDecoder
 
 
-_MEAN_STATS = (103.939, 116.779, 123.68)
+MEAN_STATS = (103.939, 116.779, 123.68)
 
 
 class VGG16(nn.Sequential):
@@ -46,8 +46,6 @@ class VGG16(nn.Sequential):
           output_layer_idx: Index of layer whose output will be used as perceptual
             feature. (default: 23, which is the `block4_conv3` layer activated by
             `ReLU` function)
-          min_val: Minimum value of the raw input. (default: -1.0)
-          max_val: Maximum value of the raw input. (default: 1.0)
         """
         sequence = OrderedDict(
             {
@@ -87,14 +85,13 @@ class VGG16(nn.Sequential):
         self.output_layer_idx = output_layer_idx
         self.min_val = min_val
         self.max_val = max_val
-        self.mean = torch.from_numpy(np.array(_MEAN_STATS)).view(1, 3, 1, 1)
+        self.mean = torch.from_numpy(np.array(MEAN_STATS)).view(1, 3, 1, 1)
         self.mean = self.mean.type(torch.FloatTensor)
 
         super().__init__(sequence)
 
     def forward(self, x):
-        # x.shape -- [1, 3, 256, 256]
-        # (Pdb) x.min(), x.max() -- -0.9922, 0.9922
+        # x.shape -- [1, 3, 256, 256], x.min(), x.max() -- -0.9922, 0.9922
         x = (x - self.min_val) * 255.0 / (self.max_val - self.min_val)
         x = x[:, [2, 1, 0], :, :]
         x = x - self.mean.to(x.device)
@@ -109,13 +106,11 @@ def get_tensor_value(tensor):
 
 
 class StyleGANRefiner(nn.Module):
-    """Implements pixel-wise feature vector normalization layer."""
-
     def __init__(self):
         super().__init__()
         self.epochs = 100
         self.learning_rate = 1e-2
-        self.pixel_loss_weight = 1.0
+        self.decoder_loss_weight = 1.0
         self.vgg16_loss_weight = 5e-5
         self.encoder_loss_weight = 2.0
 
@@ -134,32 +129,33 @@ class StyleGANRefiner(nn.Module):
 
         optimizer = optim.Adam([wcode], lr=self.learning_rate)
 
-        pbar = tqdm(range(1, self.epochs + 1), leave=True)
-        for step in pbar:
+        progress = tqdm(range(1, self.epochs + 1), leave=True)
+        for step in progress:
             loss = 0.0
+
+            loss_msg = f"Loss: "
 
             # Pixel/Decode loss
             y = self.decoder(wcode)
             loss_pixel = torch.mean((x - y) ** 2)
-            loss = loss + loss_pixel * self.pixel_loss_weight
-            log_message = f"pixel_loss: {get_tensor_value(loss_pixel):.3f}"
+            loss = loss + loss_pixel * self.decoder_loss_weight
+            loss_msg += f"decoder {get_tensor_value(loss_pixel):6.4f}, "
 
             # VGG16 loss
             x_feat = self.vgg16(x)
             y_feat = self.vgg16(y)
             loss_feat = torch.mean((x_feat - y_feat) ** 2)
             loss = loss + loss_feat * self.vgg16_loss_weight
-
-            log_message += f", vgg16_loss: {get_tensor_value(loss_feat):.3f}"
+            loss_msg += f"perception {get_tensor_value(loss_feat):8.3f}, "
 
             # Encode Loss
             wcode_rec = self.encoder(y)
             loss_reg = torch.mean((wcode - wcode_rec) ** 2)
             loss = loss + loss_reg * self.encoder_loss_weight
-            log_message += f", encoder_loss: {get_tensor_value(loss_reg):.3f}"
+            loss_msg += f"encoder {get_tensor_value(loss_reg):6.4f}, "
 
-            log_message += f", loss: {get_tensor_value(loss):.3f}"
-            pbar.set_description_str(log_message)
+            loss_msg += f"total {get_tensor_value(loss):6.4f}"
+            progress.set_description_str(loss_msg)
 
             # Do optimization.
             optimizer.zero_grad()
@@ -167,14 +163,3 @@ class StyleGANRefiner(nn.Module):
             optimizer.step()
 
         return wcode
-
-
-# model = get_vgg16("models/vgg16.pth")
-# model = model.eval()
-# print(model)
-
-# x = torch.randn(1, 3, 256, 256)
-# with torch.no_grad():
-#     y = model(x)
-
-# print(y.size())

@@ -44,15 +44,6 @@ if __name__ == "__main__":
     model = model.to(device)
     model.eval()
 
-    # encoder_model = get_encoder("models/stylegan2_encoder.pth")
-    # encoder_model = encoder_model.to(device)
-    # encoder_model.eval()
-
-    # decoder_model = get_decoder("models/stylegan2_decoder.pth")
-    # decoder_model = decoder_model.to(device)
-    # decoder_model.eval()
-
-
     totensor = transforms.ToTensor()
     toimage = transforms.ToPILImage()
 
@@ -69,6 +60,7 @@ if __name__ == "__main__":
             wcode = model.encoder(input_tensor)
             output_tensor1 = model.decoder(wcode)
 
+        # require grad
         refine_wcode = model(input_tensor)
 
         with torch.no_grad():
