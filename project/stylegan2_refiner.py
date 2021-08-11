@@ -163,3 +163,41 @@ class StyleGANRefiner(nn.Module):
             optimizer.step()
 
         return wcode
+
+
+class Attribute(object):
+    '''Get Attribute -- age, express, gender, glass, pose'''
+
+    def __init__(self):
+        self.attributes = torch.load("models/stylegan2_feature.pth")
+
+    def valid_name(self, name):
+        assert name +".layer" in self.attributes.keys()
+
+    def get_layer(self, name):
+        self.valid_name(name)
+        return self.attributes[name + ".layer"]
+
+    def get_attrs(self, name):
+        self.valid_name(name)
+        return self.attributes[name + ".attrs"]
+
+    def get_wcodes(self, wcode, name):
+        wcode = wcode.view(1, 1, 14, 512)
+        
+        distance = torch.Tensor([-3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0]).to(wcode.device)
+        distance = distance.view(1, 7, 1, 1)
+
+        attrs = self.get_attrs(name).to(wcode.device)
+        attrs = attrs.view(1, 1, 14, 512)
+        
+        layers = self.get_layer(name).to(wcode.device)
+
+
+        x = wcode + distance * attrs
+        y = wcode.repeat(1, 7, 1, 1)
+
+        select = torch.zeros(y.shape, dtype=bool)
+        select[:, :, layers] = True
+
+        return torch.where(select.to(wcode.device), x, y)

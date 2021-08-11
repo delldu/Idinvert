@@ -52,6 +52,4 @@ stylegan_feature['pose.layer'] = torch.from_numpy(layers)
 stylegan_feature['pose.attrs'] = torch.from_numpy(pose['boundary'])
 
 
-torch.save(stylegan_feature, "stylegan_feature.pth")
-
-pdb.set_trace()
+torch.save(stylegan_feature, "stylegan2_feature.pth")

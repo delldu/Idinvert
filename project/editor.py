@@ -20,6 +20,7 @@ from tqdm import tqdm
 
 from data import grid_image
 from model import model_device, model_setenv, get_encoder, get_decoder, get_refiner
+from stylegan2_refiner import Attribute
 
 if __name__ == "__main__":
     """Predict."""
@@ -50,6 +51,8 @@ if __name__ == "__main__":
     image_filenames = sorted(glob.glob(args.input))
     progress_bar = tqdm(total=len(image_filenames))
 
+    attribute = Attribute()
+
     for index, filename in enumerate(image_filenames):
         progress_bar.update(1)
 
@@ -66,5 +69,20 @@ if __name__ == "__main__":
         with torch.no_grad():
             output_tensor2 = model.decoder(refine_wcode)
 
-        image = grid_image([input_tensor, output_tensor1, output_tensor2], nrow=3)
-        image.save("{}/image_{:02d}.png".format(args.output, index + 1))
+
+        for name in ['age', 'gender', 'pose', 'express', 'glass']:
+            list_ext = [input_tensor, output_tensor1, output_tensor2]
+            print("Start length(list_ext) == ", len(list_ext))
+
+            modified_wcodes = attribute.get_wcodes(refine_wcode, name)
+            print(modified_wcodes.size())
+
+            for j in range(modified_wcodes.size(1)):
+                if (j != 3):
+                    with torch.no_grad():
+                        output_tensor = model.decoder(modified_wcodes[:, j])
+                    list_ext.append(output_tensor)
+            print("Stop length(list_ext) == ", len(list_ext))
+
+            image = grid_image(list_ext, nrow=3)
+            image.save("{}/image_{:03d}_{}.png".format(args.output, index + 1, name))

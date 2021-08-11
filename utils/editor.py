@@ -273,6 +273,7 @@ def manipulate(
     s = [1.0 for _ in range(num_layers)]
     s = np.array(s).reshape([num_layers if axis == 0 else 1 for axis in range(b.ndim)])
     # pp s.shape -- (14, 1)
+
     b = b * s
 
     if x.shape[1:] != b.shape:
@@ -291,16 +292,24 @@ def manipulate(
         [step if axis == 1 else 1 for axis in range(x.ndim)]
     )
     # pp l.shape -- (1, 7, 1, 1)
+
+    # [step if axis == 1 else 1 for axis in range(x.ndim)] -- [1, 7, 1, 1]
+
     results = np.tile(x, [step if axis == 1 else 1 for axis in range(x.ndim)])
     # results.shape -- (20, 7, 14, 512)
     is_manipulatable = np.zeros(results.shape, dtype=bool)
 
+    # is_manipulatable.shape -- (20, 7, 14, 512)
+    # (Pdb) x.shape -- (20, 1, 14, 512)
+    # pp l.shape -- (1, 7, 1, 1),  
+    # pp l.tolist() -- [[[[-3.0]], [[-2.0]], [[-1.0]], [[0.0]], [[1.0]], [[2.0]], [[3.0]]]]
+    # pp b.shape -- (1, 1, 14, 512)
     is_manipulatable[:, :, layer_indices] = True
     results = np.where(is_manipulatable, x + l * b, results)
     # (l *b).shape -- (1, 7, 14, 512)
 
     assert results.shape == (num, step, num_layers, *code_shape)
-
+    # results.shape -- (20, 7, 14, 512)
     return results
 
 
