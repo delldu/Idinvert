@@ -146,6 +146,7 @@ class StyleGANInverter(object):
 
         # self.G.max_val,self.G.min_val -- (1.0, -1.0)
         image = image / 255.0 * (self.G.max_val - self.G.min_val) + self.G.min_val
+        # image.shape -- (256, 256, 3)
         image = image.astype(np.float32).transpose(2, 0, 1)
 
         # image.shape, image.min(), image.max() -- ((3, 256, 256), -0.99215686, 0.99215686)
@@ -211,6 +212,7 @@ class StyleGANInverter(object):
 
             # Reconstruction loss.
             x_rec = self.G.net.synthesis(z)
+            # x_rec.requires_grad == True
             loss_pix = torch.mean((x - x_rec) ** 2)
             loss = loss + loss_pix * self.loss_pix_weight
             log_message = f"loss_pix: {get_tensor_value(loss_pix):.3f}"
@@ -228,6 +230,8 @@ class StyleGANInverter(object):
             # self.loss_reg_weight == regularization_loss_weight -- 2.0
             if self.loss_reg_weight:
                 z_rec = self.E.net(x_rec).view(1, *self.encode_dim)
+                # z_rec.requires_grad -- True
+
                 loss_reg = torch.mean((z - z_rec) ** 2)
                 loss = loss + loss_reg * self.loss_reg_weight
                 log_message += f", loss_reg: {get_tensor_value(loss_reg):.3f}"

@@ -40,6 +40,9 @@ if __name__ == "__main__":
 
     model_setenv()
     device = model_device()
+    model = get_refiner()
+    model = model.to(device)
+    model.eval()
 
     # encoder_model = get_encoder("models/stylegan2_encoder.pth")
     # encoder_model = encoder_model.to(device)
@@ -49,7 +52,6 @@ if __name__ == "__main__":
     # decoder_model = decoder_model.to(device)
     # decoder_model.eval()
 
-    model = get_refiner()
 
     totensor = transforms.ToTensor()
     toimage = transforms.ToPILImage()
@@ -66,7 +68,10 @@ if __name__ == "__main__":
         with torch.no_grad():
             wcode = model.encoder(input_tensor)
             output_tensor1 = model.decoder(wcode)
-            refine_wcode = model(input_tensor)
+
+        refine_wcode = model(input_tensor)
+
+        with torch.no_grad():
             output_tensor2 = model.decoder(refine_wcode)
 
         image = grid_image([input_tensor, output_tensor1, output_tensor2], nrow=3)

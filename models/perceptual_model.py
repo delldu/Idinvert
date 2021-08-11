@@ -81,9 +81,19 @@ class VGG16(nn.Sequential):
         self.max_val = max_val
         self.mean = torch.from_numpy(np.array(_MEAN_STATS)).view(1, 3, 1, 1)
         self.mean = self.mean.type(torch.FloatTensor)
+
+        # _MEAN_STATS -- (103.939, 116.779, 123.68)
+        # self.max_val , self.min_val -- (1.0, -1.0)
+        # (Pdb) self.mean
+        # tensor([[[[103.9390]], [[116.7790]], [[123.6800]]]])
+        # (Pdb) self.mean.shape
+        # torch.Size([1, 3, 1, 1])
+
         super().__init__(sequence)
 
     def forward(self, x):
+        # x.shape -- [1, 3, 256, 256]
+        # (Pdb) x.min(), x.max() -- -0.9922, 0.9922
         x = (x - self.min_val) * 255.0 / (self.max_val - self.min_val)
         x = x[:, [2, 1, 0], :, :]
         x = x - self.mean.to(x.device)
@@ -117,6 +127,7 @@ class PerceptualModel(object):
 
         if not os.path.isfile(self.weight_path):
             raise IOError("No pre-trained weights found for perceptual model!")
+        # self.weight_path -- 'models/pretrain/vgg16.pth'
         self.net.load_state_dict(torch.load(self.weight_path))
         self.net.eval().to(self.run_device)
 

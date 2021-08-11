@@ -18,7 +18,9 @@ import torch.optim as optim
 import pdb
 
 from tqdm import tqdm
-from model import model_setenv, model_device, get_encoder, get_decoder, get_vgg16
+
+from stylegan2_encoder import StyleGANEncoder
+from stylegan2_decoder import StyleGANDecoder
 
 
 _MEAN_STATS = (103.939, 116.779, 123.68)
@@ -117,16 +119,11 @@ class StyleGANRefiner(nn.Module):
         self.vgg16_loss_weight = 5e-5
         self.encoder_loss_weight = 2.0
 
-        model_setenv()
-        device = model_device()
-        self.device = device
-
-        self.encoder = get_encoder("models/stylegan2_encoder.pth").eval().to(device)
-        self.decoder = get_decoder("models/stylegan2_decoder.pth").eval().to(device)
-        self.vgg16 = get_vgg16("models/vgg16.pth").eval().to(device)
+        self.encoder = StyleGANEncoder()
+        self.decoder = StyleGANDecoder()
+        self.vgg16 = VGG16()
 
     def forward(self, x):
-        x = x.to(self.device)
         x.requires_grad = False
 
         # x.size() -- [1, 3, 256, 256]
@@ -142,26 +139,22 @@ class StyleGANRefiner(nn.Module):
             loss = 0.0
 
             # Pixel/Decode loss
-            with torch.no_grad():
-                y = self.decoder(wcode)
-
+            y = self.decoder(wcode)
             loss_pixel = torch.mean((x - y) ** 2)
             loss = loss + loss_pixel * self.pixel_loss_weight
             log_message = f"pixel_loss: {get_tensor_value(loss_pixel):.3f}"
 
             # VGG16 loss
-            with torch.no_grad():
-                x_feat = self.vgg16(x)
-                y_feat = self.vgg16(y)
+            x_feat = self.vgg16(x)
+            y_feat = self.vgg16(y)
             loss_feat = torch.mean((x_feat - y_feat) ** 2)
             loss = loss + loss_feat * self.vgg16_loss_weight
 
             log_message += f", vgg16_loss: {get_tensor_value(loss_feat):.3f}"
 
             # Encode Loss
-            with torch.no_grad():
-                wcode_rec = self.encoder(y)
-            loss_reg = torch.mean((wscode - wcode_rec) ** 2)
+            wcode_rec = self.encoder(y)
+            loss_reg = torch.mean((wcode - wcode_rec) ** 2)
             loss = loss + loss_reg * self.encoder_loss_weight
             log_message += f", encoder_loss: {get_tensor_value(loss_reg):.3f}"
 
@@ -173,7 +166,7 @@ class StyleGANRefiner(nn.Module):
             loss.backward()
             optimizer.step()
 
-        return wscode, y
+        return wcode
 
 
 # model = get_vgg16("models/vgg16.pth")

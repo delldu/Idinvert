@@ -234,6 +234,8 @@ class SynthesisModule(nn.Module):
         return min((16 << 10) // res, 512)
 
     def forward(self, w):
+        # w.size -- [1, 14, 512]       
+        
         # self.init_res_log2 -- 2
         # self.final_res_log2 -- 8
 
