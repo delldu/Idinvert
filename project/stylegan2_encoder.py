@@ -99,7 +99,7 @@ class StyleGANEncoder(nn.Module):
             x = self.__getattr__(f"block{block_idx}")(x)
         # (Pdb) x.size() -- [1, 7168]
 
-        return x.view(1, self.num_layers, 512)
+        return x.view(1, 1, self.num_layers, 512)
 
 
 class AveragePoolingLayer(nn.Module):

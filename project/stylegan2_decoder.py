@@ -5,130 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pdb
 
-# Initial resolution.
-_INIT_RES = 4
-
-# xxxx3333
-class StyleGANDecoderNet(nn.Module):
-    """Defines the generator network in StyleGAN.
-
-    NOTE: the generated images are with `RGB` color channels and range [-1, 1].
-    """
-
-    def __init__(
-        self,
-        resolution=256,
-        z_space_dim=512,
-        w_space_dim=512,
-        num_mapping_layers=8,
-        image_channels=3,
-        truncation_psi=0.7,
-        truncation_layers=8,
-    ):
-        super().__init__()
-        # resolution = 256
-        # z_space_dim = 512
-        # w_space_dim = 512
-        # num_mapping_layers = 8
-        # image_channels = 3
-        # truncation_psi = 0.7
-        # truncation_layers = 8
-
-        self.init_res = _INIT_RES
-        self.resolution = resolution
-        self.z_space_dim = z_space_dim
-        self.w_space_dim = w_space_dim
-        self.num_mapping_layers = num_mapping_layers
-        self.image_channels = image_channels
-        self.truncation_psi = truncation_psi
-        self.truncation_layers = truncation_layers
-
-        self.num_layers = int(np.log2(self.resolution // self.init_res * 2)) * 2
-
-        mapping_space_dim = self.w_space_dim * self.num_layers
-        self.mapping = MappingModule(
-            input_space_dim=self.z_space_dim,
-            hidden_space_dim=512,
-            final_space_dim=mapping_space_dim,
-            num_layers=self.num_mapping_layers,
-        )
-        self.truncation = TruncationModule(
-            num_layers=self.num_layers,
-            w_space_dim=self.w_space_dim,
-            truncation_psi=self.truncation_psi,
-            truncation_layers=self.truncation_layers,
-        )
-        self.synthesis = SynthesisModule(
-            init_resolution=self.init_res,
-            resolution=self.resolution,
-            w_space_dim=self.w_space_dim,
-            image_channels=self.image_channels,
-        )
-
-
-# xxxx3333
-class MappingModule(nn.Module):
-    """Implements the latent space mapping module."""
-
-    def __init__(
-        self,
-        input_space_dim=512,
-        hidden_space_dim=512,
-        final_space_dim=512,
-        num_layers=8,
-    ):
-        super().__init__()
-
-        self.input_space_dim = input_space_dim
-        self.num_layers = num_layers
-
-        self.norm = PixelNormLayer()
-
-        for i in range(num_layers):
-            dim_mul = 1
-            in_dim = input_space_dim * dim_mul if i == 0 else hidden_space_dim
-            out_dim = final_space_dim if i == (num_layers - 1) else hidden_space_dim
-            self.add_module(f"dense{i}", DenseBlock(in_dim, out_dim))
-        # input_space_dim = 512
-        # hidden_space_dim = 512
-        # final_space_dim = 7168
-        # num_layers = 8
-
-    def forward(self, z, l=None):
-        w = self.norm(z)
-        # num_layers = 8
-        for i in range(self.num_layers):
-            w = self.__getattr__(f"dense{i}")(w)
-        return w
-
-
-# xxxx3333
-class TruncationModule(nn.Module):
-    """Implements the truncation module."""
-
-    def __init__(
-        self,
-        num_layers,
-        w_space_dim=512,
-        truncation_psi=0.7,
-        truncation_layers=8,
-    ):
-        super().__init__()
-
-        self.num_layers = num_layers
-        self.w_space_dim = w_space_dim
-
-        self.register_buffer("w_avg", torch.zeros(w_space_dim))
-
-        layer_idx = np.arange(self.num_layers).reshape(1, self.num_layers, 1)
-        coefs = np.ones_like(layer_idx, dtype=np.float32)
-        coefs[layer_idx < truncation_layers] *= truncation_psi
-        self.register_buffer("truncation", torch.from_numpy(coefs))
-
-    def forward(self, w):
-        w_avg = self.w_avg.view(1, 1, self.w_space_dim)
-        return w_avg + (w - w_avg) * self.truncation
-
 
 class StyleGANDecoder(nn.Module):
     """Implements the image synthesis module.
@@ -226,6 +102,7 @@ class StyleGANDecoder(nn.Module):
         return min((16 << 10) // res, 512)
 
     def forward(self, w):
+        w = w.squeeze(0)
         # self.init_res_log2 -- 2
         # self.final_res_log2 -- 8
 

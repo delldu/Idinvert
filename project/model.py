@@ -75,7 +75,7 @@ def get_refiner():
     model = StyleGANRefiner()
     model_load(model.encoder, "models/stylegan2_encoder.pth", prefix="")
     model_load(model.decoder, "models/stylegan2_decoder.pth", prefix="synthesis.")
-    model_load(model.vgg16, "models/vgg16.pth", prefix="")
+    model_load(model.vgg16, "models/stylegan2_vgg16.pth", prefix="")
 
     return model
 
